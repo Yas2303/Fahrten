@@ -54,18 +54,29 @@ def styled_subheader(text):
 def display_full_path_image(image_relative_path, caption, width=None):
     """
     Displays an image from a path relative to UPLOAD_DIR.
-    This replaces the previous display_vehicle_image and handles profile pictures too.
+    Includes debugging information to help diagnose image loading issues.
     """
     if image_relative_path:
+        # Construire le chemin complet du fichier en utilisant UPLOAD_DIR
+        # Exemple: UPLOAD_DIR = "uploads", image_relative_path = "profile_pictures/my_pic.png"
+        # full_path deviendra "uploads/profile_pictures/my_pic.png"
         full_path = os.path.join(UPLOAD_DIR, image_relative_path)
+        
+        # --- Lignes de débogage ---
+        st.write(f"DEBUG: Tentative de chargement de l'image depuis: `{full_path}`")
+        st.write(f"DEBUG: Le fichier existe-t-il à ce chemin? `{os.path.exists(full_path)}`")
+        # --- Fin des lignes de débogage ---
+
         if os.path.exists(full_path):
             try:
                 image = Image.open(full_path)
                 st.image(image, caption=caption, width=width)
             except Exception as e:
                 st.warning(f"{translate('Impossible de charger l\'image')} {os.path.basename(full_path)}: {e}")
+                st.write(f"DEBUG: Erreur lors du chargement de l'image: {e}") # Debugging line for loading errors
         else:
             st.info(f"{translate('Image non trouvée pour')} {caption} ({image_relative_path}).")
+            st.write(f"DEBUG: Le chemin complet n'existe pas: `{full_path}`") # Debugging line for non-existent paths
     else:
         st.info(f"{translate('Pas de chemin d\'image fourni pour')} {caption}.")
 
@@ -115,23 +126,7 @@ def main():
             font-weight: bold;
         }
 
-        [data-testid="stSidebar"] {
-            background-color: var(--primary-dark);
-            color: var(--off-white);
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 3px 0px 10px rgba(0, 0, 0, 0.3);
-        }
-
-        [data-testid="stSidebar"] .st-emotion-cache-1jm50x5 {
-            display: none;
-        }
-
-        [data-testid="stSidebar"] .st-emotion-cache-10o4u29 {
-            color: var(--off-white);
-            font-weight: bold;
-        }
-
+        /* Styling for all Streamlit buttons, EXCEPT those in the sidebar */
         .stButton > button {
             background-color: var(--accent-red);
             color: var(--off-white);
@@ -141,6 +136,10 @@ def main():
             font-weight: bold;
             transition: background-color 0.3s ease, transform 0.2s ease;
             box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+            width: auto; /* Ensure buttons only take necessary width */
+            display: inline-flex; /* Allow content to dictate width */
+            justify-content: center;
+            align-items: center;
         }
         .stButton > button:hover {
             background-color: var(--dark-red-accent);
@@ -152,10 +151,10 @@ def main():
             box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
         }
 
+        /* Specific styling for sidebar buttons (menu items) */
         [data-testid="stSidebar"] [data-testid="stVerticalBlock"] .stButton {
             margin-bottom: 5px;
         }
-
         [data-testid="stSidebar"] [data-testid="stVerticalBlock"] .stButton > button {
             background-color: transparent;
             color: var(--off-white);
@@ -165,10 +164,9 @@ def main():
             text-align: left;
             box-shadow: none;
             transition: background-color 0.2s ease, color 0.2s ease;
-            width: 100%;
+            width: 100%; /* Sidebar buttons fill their container */
             font-weight: bold;
         }
-
         [data-testid="stSidebar"] [data-testid="stVerticalBlock"] .stButton > button:hover {
             background-color: rgba(241, 0, 0, 0.2);
             color: var(--accent-red);
@@ -303,6 +301,9 @@ def main():
             margin-top: 20px;
             border: 1px solid var(--secondary-gray);
             box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.1);
+            height: 100%; /* Ensure vehicle cards try to fill available height */
+            display: flex; /* Use flexbox for internal layout */
+            flex-direction: column; /* Stack content vertically */
         }
         .vehicle-card h4 {
             color: var(--primary-dark);
@@ -767,8 +768,9 @@ def show_edit_profile():
     # --- Section 2: Manage Vehicles ---
     styled_subheader(translate("Gestion des Véhicules"))
 
-    
-    col_add_veh, col_list_veh = st.columns([1, 1]) 
+    # Use two main columns for vehicle management: Add new vs. List existing
+    # col_add_veh (left, 1 part), col_list_veh (right, 2 parts, occupies more space)
+    col_add_veh, col_list_veh = st.columns([1, 2]) 
 
     with col_add_veh:
         with st.expander(translate("Ajouter un nouveau véhicule"), expanded=False):
@@ -776,28 +778,29 @@ def show_edit_profile():
 
     with col_list_veh:
         st.subheader(translate("Mes véhicules enregistrés"))
-        vehicles = get_user_vehiculs_db(user_id) 
+        vehicles = get_user_vehiculs_db(user_id) # Fetch current vehicles
 
         if vehicles:
-        
+            # If a vehicle is selected for editing, show its edit form in the right column
             if st.session_state.editing_vehicle_id:
                 editing_vehicle_data = next((v for v in vehicles if v[0] == st.session_state.editing_vehicle_id), None)
                 if editing_vehicle_data:
                     show_edit_vehicle_form(user_id, editing_vehicle_data)
                 else:
-                    st.session_state.editing_vehicle_id = None 
+                    st.session_state.editing_vehicle_id = None # Reset if vehicle not found
                     st.rerun()
             else:
-             
+                # Otherwise, display all vehicles in a 2-column layout within col_list_veh
+                # This creates a grid-like appearance for the vehicle cards
                 num_vehicles = len(vehicles)
                 for i in range(0, num_vehicles, 2):
-                    row_cols = st.columns(2)
+                    row_cols = st.columns(2) # Create 2 columns for each row of vehicles
                     for j in range(2):
                         if i + j < num_vehicles:
                             vehicle = vehicles[i + j]
                             vehicle_id, marque, model, date_circulation, pic_inter1, pic_inter2, pic_exter1, pic_exter2 = vehicle
                             
-                            with row_cols[j]: 
+                            with row_cols[j]: # Place each vehicle card in one of the sub-columns
                                 st.markdown(f"""
                                 <div class='vehicle-card'>
                                     <h4>{translate("Véhicule")}: {marque} {model}</h4>
@@ -806,8 +809,8 @@ def show_edit_profile():
                                     <p><strong>{translate('Date de mise en circulation')}:</strong> {date_circulation}</p>
                                 """, unsafe_allow_html=True)
 
-                               
-                                card_image_cols = st.columns(2) 
+                                # Display vehicle images within the card, using smaller columns
+                                card_image_cols = st.columns(2) # Two columns within the vehicle card for images
                                 with card_image_cols[0]:
                                     display_full_path_image(pic_inter1, translate("Intérieur 1"), width=80)
                                     display_full_path_image(pic_inter2, translate("Intérieur 2"), width=80)
@@ -845,12 +848,12 @@ def show_edit_profile():
                                         st.session_state[f'confirm_delete_{vehicle_id}'] = False
                                         st.rerun()
 
-                                st.markdown("</div>", unsafe_allow_html=True) 
+                                st.markdown("</div>", unsafe_allow_html=True) # Close vehicle-card div
                                 st.markdown("---")
         else:
             st.info(translate("Aucun véhicule enregistré pour le moment. Utilisez le formulaire ci-dessus pour en ajouter un."))
 
 
-
+# --- Entry Point ---
 if __name__ == "__main__":
     main()
