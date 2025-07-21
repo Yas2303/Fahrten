@@ -57,10 +57,11 @@ def display_full_path_image(image_relative_path, caption, width=None):
     Includes debugging information to help diagnose image loading issues.
     """
     if image_relative_path:
+        # Normalize path separators to always use forward slashes for consistency
+        normalized_relative_path = image_relative_path.replace('\\', '/')
+
         # Construire le chemin complet du fichier en utilisant UPLOAD_DIR
-        # Exemple: UPLOAD_DIR = "uploads", image_relative_path = "profile_pictures/my_pic.png"
-        # full_path deviendra "uploads/profile_pictures/my_pic.png"
-        full_path = os.path.join(UPLOAD_DIR, image_relative_path)
+        full_path = os.path.join(UPLOAD_DIR, normalized_relative_path)
         
         # --- Lignes de débogage ---
         st.write(f"DEBUG: Tentative de chargement de l'image depuis: `{full_path}`")
