@@ -57,16 +57,13 @@ def display_full_path_image(image_relative_path, caption, width=None):
     Includes debugging information to help diagnose image loading issues.
     """
     if image_relative_path:
-        # Normalize path separators to always use forward slashes for consistency
+       
         normalized_relative_path = image_relative_path.replace('\\', '/')
 
-        # Construire le chemin complet du fichier en utilisant UPLOAD_DIR
+     
         full_path = os.path.join(UPLOAD_DIR, normalized_relative_path)
         
-        # --- Lignes de débogage ---
-        st.write(f"DEBUG: Tentative de chargement de l'image depuis: `{full_path}`")
-        st.write(f"DEBUG: Le fichier existe-t-il à ce chemin? `{os.path.exists(full_path)}`")
-        # --- Fin des lignes de débogage ---
+       
 
         if os.path.exists(full_path):
             try:
@@ -77,7 +74,7 @@ def display_full_path_image(image_relative_path, caption, width=None):
                 st.write(f"DEBUG: Erreur lors du chargement de l'image: {e}") # Debugging line for loading errors
         else:
             st.info(f"{translate('Image non trouvée pour')} {caption} ({image_relative_path}).")
-            st.write(f"DEBUG: Le chemin complet n'existe pas: `{full_path}`") # Debugging line for non-existent paths
+            #st.write(f"DEBUG: Le chemin complet n'existe pas: `{full_path}`") # Debugging line for non-existent paths
     else:
         st.info(f"{translate('Pas de chemin d\'image fourni pour')} {caption}.")
 
