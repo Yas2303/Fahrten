@@ -7,109 +7,91 @@ from PIL import Image
 import os
 import base64
 
-def get_base64_icon(image_path):
-    try:
-        full_path = os.path.join(os.path.dirname(__file__), image_path)
-        with open(full_path, "rb") as f:
-            encoded_string = base64.b64encode(f.read()).decode()
-        return encoded_string
-    except FileNotFoundError:
-        st.error(f"Erreur : Fichier d'icône introuvable à '{image_path}'. Vérifiez le chemin.")
-        return None
-    except Exception as e:
-        st.error(f"Erreur lors du chargement de l'icône : {e}")
-        return None
+# --- Configuration des dossiers pour les images (Doit être cohérent avec Database_Fahrten.py) ---
+UPLOAD_DIR = "uploads"
+PROFILE_PICTURES_DIR = os.path.join(UPLOAD_DIR, "profile_pictures")
+VEHICLE_PICTURES_DIR = os.path.join(UPLOAD_DIR, "vehicle_pictures")
 
-def display_logo(image_path, width=200):
-    try:
-        full_path = os.path.join(os.path.dirname(__file__), image_path)
-        img = Image.open(full_path)
-        st.image(img, width=width)
-    except FileNotFoundError:
-        st.error(f"Erreur : Image introuvable à '{image_path}'. Vérifiez le chemin.")
-    except Exception as e:
-        st.error(f"Erreur lors du chargement de l'image : {e}")
+# Assurez-vous que les dossiers existent
+os.makedirs(PROFILE_PICTURES_DIR, exist_ok=True)
+os.makedirs(VEHICLE_PICTURES_DIR, exist_ok=True)
 
-def setup_db():
-    with sqlite3.connect('priminsberg_rides.db') as conn:
-        c = conn.cursor()
-        c.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            first_name TEXT,
-            last_name TEXT,
-            station TEXT,
-            email TEXT,
-            phone TEXT
-        )''')
-        c.execute('''
-        CREATE TABLE IF NOT EXISTS rides (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            provider_id INTEGER,
-            start_location TEXT,
-            destination TEXT,
-            date TEXT,
-            time TEXT,
-            available_seats INTEGER,
-            FOREIGN KEY(provider_id) REFERENCES users(id)
-        )
-        ''')
-        c.execute('''
-        CREATE TABLE IF NOT EXISTS bookings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            ride_id INTEGER,
-            FOREIGN KEY(user_id) REFERENCES users(id),
-            FOREIGN KEY(ride_id) REFERENCES rides(id)
-        )
-        ''')
-        conn.commit()
+# --- Importations des modules locaux ---
+# Assurez-vous que toutes les fonctions nécessaires sont importées
+from Database_Fahrten import (
+    setup_db, add_vehicul_db, save_vehicle_image, save_profile_picture, save_image,
+    update_user_profile_picture, update_vehicul_pictures, delete_image, display_image,
+    register_user_db, get_user_by_username_db, update_user_profile_db,
+    add_ride_db, get_rides_db, delete_ride_db, update_ride_db,
+    book_ride_db, get_user_bookings_db, get_user_vehiculs_db
+)
+from Utils_Fahrten import display_logo, hash_password, verify_password, translate, get_base64_icon
+from Rides import show_display_rides, show_my_rides, show_offer_ride, edit_ride # Assuming Rides.py exists and contains these
 
-def hash_password(password):
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-
-def verify_password(plain_password, hashed_password):
-    return bcrypt.checkpw(plain_password.encode(), hashed_password)
+# --- Helper Functions for UI ---
 
 def display_app_header(page_title):
-    col1, col2 = st.columns([0.2, 0.8])
+    """Displays the application header with logo and title."""
+    col1, col2 = st.columns([0.1, 2])
     with col1:
         display_logo(os.path.join("Images", "Logo_MitFahrn.PNG"), width=100)
     with col2:
         st.markdown(f"""
         <h1 style='color: var(--accent-red); font-weight: bold; border-bottom: 2px solid var(--secondary-gray); padding-bottom: 10px;'>
-            {page_title}
+            {translate(page_title)}
         </h1>
         """, unsafe_allow_html=True)
     st.markdown("---")
 
 def styled_subheader(text):
+    """Displays a styled subheader."""
     st.markdown(f"""
     <h2 style='color: var(--accent-red); font-weight: bold; margin-top: 20px;'>
-        {text}
+        {translate(text)}
     </h2>
     """, unsafe_allow_html=True)
 
+def display_full_path_image(image_relative_path, caption, width=None):
+    """
+    Displays an image from a path relative to UPLOAD_DIR.
+    This replaces the previous display_vehicle_image and handles profile pictures too.
+    """
+    if image_relative_path:
+        full_path = os.path.join(UPLOAD_DIR, image_relative_path)
+        if os.path.exists(full_path):
+            try:
+                image = Image.open(full_path)
+                st.image(image, caption=caption, width=width)
+            except Exception as e:
+                st.warning(f"{translate('Impossible de charger l\'image')} {os.path.basename(full_path)}: {e}")
+        else:
+            st.info(f"{translate('Image non trouvée pour')} {caption} ({image_relative_path}).")
+    else:
+        st.info(f"{translate('Pas de chemin d\'image fourni pour')} {caption}.")
+
+
+# --- Main Application Logic ---
+
 def main():
+    """Main function to run the Streamlit application."""
     icon_base64 = get_base64_icon(os.path.join("Images", "Logo_MitFahrn.ico"))
     if icon_base64:
         st.set_page_config(
             layout="wide",
-            page_title="Gestion des trajets Priminsberg",
+            page_title=translate("Gestion des trajets Priminsberg"),
             page_icon=f"data:image/x-icon;base64,{icon_base64}",
             initial_sidebar_state="expanded"
         )
     else:
         st.set_page_config(
             layout="wide",
-            page_title="Gestion des trajets Priminsberg",
+            page_title=translate("Gestion des trajets Priminsberg"),
             initial_sidebar_state="expanded"
         )
 
-    setup_db()
+    setup_db() # Ensure database is set up
 
+    # --- CSS Styling ---
     st.markdown("""
     <style>
         :root {
@@ -196,7 +178,8 @@ def main():
         .stTextInput > div > div > input,
         .stDateInput > div > input,
         .stTimeInput > div > input,
-        .stNumberInput > div > input {
+        .stNumberInput > div > input,
+        .stFileUploader > div > div > button { /* Apply to file uploader button */
             background-color: var(--light-gray);
             color: var(--primary-dark);
             border: 1px solid var(--secondary-gray);
@@ -218,7 +201,8 @@ def main():
         .stDateInput > label,
         .stTimeInput > label,
         .stNumberInput > label,
-        .stSelectbox > label {
+        .stSelectbox > label,
+        .stFileUploader > label { /* Apply to file uploader label */
             color: var(--primary-dark);
             font-weight: bold;
             margin-bottom: 5px;
@@ -312,481 +296,561 @@ def main():
             margin-bottom: 15px;
             border-left: 5px solid var(--accent-red);
         }
-
+        .vehicle-card {
+            background-color: var(--off-white);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            border: 1px solid var(--secondary-gray);
+            box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.1);
+        }
+        .vehicle-card h4 {
+            color: var(--primary-dark);
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
     </style>
     """, unsafe_allow_html=True)
 
+    # --- Session State Initialization ---
     if 'current_user' not in st.session_state:
         st.session_state.current_user = None
     if 'page' not in st.session_state:
         st.session_state.page = "landing"
     if 'menu_selection' not in st.session_state:
         st.session_state.menu_selection = "profile"
+    if 'editing_vehicle_id' not in st.session_state: # New state for vehicle editing
+        st.session_state.editing_vehicle_id = None
 
+    # --- Conditional Page Rendering (Login/Register/Landing vs. Authenticated User) ---
     if st.session_state.current_user is None:
         if st.session_state.page == "login":
-            display_app_header("Connexion")
+            display_app_header(translate("Connexion"))
             show_login()
         elif st.session_state.page == "register":
-            display_app_header("Inscription")
+            display_app_header(translate("Inscription"))
             show_register()
         else:
-            display_app_header("Bienvenue sur Priminsberg Ride")
+            display_app_header(translate("Bienvenue sur Priminsberg Ride"))
             show_landing()
     else:
+        # Authenticated User Sidebar Menu
         st.sidebar.markdown(f"""
         <div style="text-align: center; margin-bottom: 30px;">
             <h2 style="color: var(--accent-red); font-size: 1.5em; font-weight: bold; 
                         border-bottom: 2px solid var(--dark-red-accent); padding-bottom: 10px;">
-                Bienvenue, {st.session_state.current_user[3]}!
+                {translate("Bienvenue")}, {st.session_state.current_user[3]}!
             </h2>
         </div>
         """, unsafe_allow_html=True)
 
         menu_items = [
-            ("Mon Profil", "profile"),
-            ("Afficher les trajets", "display_rides"),
-            ("Proposer un trajet", "offer_ride"),
-            ("Mes trajets", "my_rides"),
-            ("Modifier le profil", "edit_profile")
+            (translate("Mon Profil"), "profile"),
+            (translate("Fahrten anzeigen"), "display_rides"),
+            (translate("Proposer un trajet"), "offer_ride"),
+            (translate("Mes trajets"), "my_rides"),
+            (translate("Modifier le profil"), "edit_profile") # This is where vehicle management will be
         ]
 
         for label, key_name in menu_items:
             if st.sidebar.button(label, key=f"menu_{key_name}"):
                 st.session_state.menu_selection = key_name
+                st.session_state.editing_vehicle_id = None # Reset editing vehicle when changing menu
                 st.rerun()
 
-        if st.sidebar.button("Se déconnecter", key="sidebar_logout_btn"):
+        if st.sidebar.button(translate("Se déconnecter"), key="sidebar_logout_btn"):
             st.session_state.current_user = None
             st.session_state.page = "landing"
             st.session_state.menu_selection = "profile"
+            st.session_state.editing_vehicle_id = None # Reset on logout
             st.rerun()
 
+    # --- Authenticated User Main Content Rendering ---
     if st.session_state.current_user is not None:
         if st.session_state.menu_selection == "profile":
-            display_app_header("Mon Profil")
+            display_app_header(translate("Mon Profil"))
             show_profile()
         elif st.session_state.menu_selection == "display_rides":
-            display_app_header("Trajets disponibles")
+            display_app_header(translate("Trajets disponibles"))
             show_display_rides()
         elif st.session_state.menu_selection == "offer_ride":
-            display_app_header("Proposer un trajet")
+            display_app_header(translate("Proposer un trajet"))
             show_offer_ride()
         elif st.session_state.menu_selection == "my_rides":
-            display_app_header("Mes trajets")
+            display_app_header(translate("Mes trajets"))
             show_my_rides()
         elif st.session_state.menu_selection == "edit_profile":
-            display_app_header("Modifier le profil")
+            display_app_header(translate("Modifier le profil"))
             show_edit_profile()
 
+# --- Landing Page ---
 def show_landing():
-    st.markdown("""
+    """Displays the landing page with login/register options."""
+    st.markdown(f"""
     <div style='background-color: var(--light-gray); padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
-        <h3 style='color: var(--accent-red);'>Bienvenue sur la plateforme de covoiturage Priminsberg</h3>
-        <p>Connectez-vous ou inscrivez-vous pour accéder à toutes les fonctionnalités.</p>
+        <h3 style='color: var(--accent-red);'>{translate("Bienvenue sur la plateforme de covoiturage Priminsberg")}</h3>
+        <p>{translate("Connectez-vous ou inscrivez-vous pour accéder à toutes les fonctionnalités.")}</p>
     </div>
     """, unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Se connecter", key="landing_login_button"):
+        if st.button(translate("Se connecter"), key="landing_login_button"):
             st.session_state.page = "login"
             st.rerun()
     with col2:
-        if st.button("S'inscrire", key="landing_register_button"):
+        if st.button(translate("S'inscrire"), key="landing_register_button"):
             st.session_state.page = "register"
             st.rerun()
 
+# --- Login Page ---
 def show_login():
+    """Displays the login form."""
     with st.form(key="login_form"):
-        username = st.text_input("Nom d'utilisateur", key="login_username")
-        password = st.text_input("Mot de passe", type="password", key="login_password")
+        username = st.text_input(translate("Nom d'utilisateur"), key="login_username")
+        password = st.text_input(translate("Mot de passe"), type="password", key="login_password")
 
         col1, col2 = st.columns(2)
         with col1:
-            if st.form_submit_button("Se connecter"):
-                with sqlite3.connect('priminsberg_rides.db') as conn:
-                    c = conn.cursor()
-                    c.execute("SELECT id, username, password, first_name, last_name, station, email, phone FROM users WHERE username = ?", (username,))
-                    user = c.fetchone()
-
+            if st.form_submit_button(translate("Se connecter")):
+                user = get_user_by_username_db(username) # Use the DB function
                 if user and verify_password(password, user[2]):
                     st.session_state.current_user = user
                     st.session_state.page = "profile"
                     st.session_state.menu_selection = "profile"
                     st.rerun()
                 else:
-                    st.error("Échec de la connexion ! Nom d'utilisateur ou mot de passe invalide.")
+                    st.error(translate("Échec de la connexion ! Nom d'utilisateur ou mot de passe invalide."))
         with col2:
-            if st.form_submit_button("Retour"):
+            if st.form_submit_button(translate("Retour")):
                 st.session_state.page = "landing"
                 st.rerun()
 
+# --- Register Page ---
 def show_register():
+    """Displays the user registration form, including profile picture and driving license date."""
     with st.form(key="register_form"):
-        username = st.text_input("Nom d'utilisateur", key="register_username")
-        password = st.text_input("Mot de passe", type="password", key="register_password")
-        first_name = st.text_input("Prénom", key="register_first_name")
-        last_name = st.text_input("Nom de famille", key="register_last_name")
-        station = st.text_input("Gare", help="Votre gare habituelle, ex : 'Hauptbahnhof'", key="register_station")
-        email = st.text_input("Email", key="register_email")
-        phone = st.text_input("Téléphone", key="register_phone")
+        username = st.text_input(translate("Nom d'utilisateur"), key="register_username")
+        password = st.text_input(translate("Mot de passe"), type="password", key="register_password")
+        first_name = st.text_input(translate("Prénom"), key="register_first_name")
+        last_name = st.text_input(translate("Nom de famille"), key="register_last_name")
+        station = st.text_input(translate("Gare"), help=translate("Votre gare habituelle, ex : 'Hauptbahnhof'"), key="register_station")
+        email = st.text_input(translate("Email"), key="register_email")
+        phone = st.text_input(translate("Téléphone"), key="register_phone")
+        
+        # Profile picture upload
+        profile_picture_file = st.file_uploader(translate("Photo de profil (Optionnel)"), 
+                                               type=["jpg", "jpeg", "png"], 
+                                               key="register_profile_pic_uploader")
+        
+        # Driving license date input
+        driving_license_date = st.date_input(translate("Date d'obtention du permis"), 
+                                             value=date.today(), 
+                                             key="register_license_date")
 
         col1, col2 = st.columns(2)
         with col1:
-            submitted = st.form_submit_button("S'inscrire")
-            if submitted:
-                if not all([username, password, first_name, last_name, station, email, phone]):
-                    st.error("Veuillez remplir tous les champs !")
-                else:
-                    try:
-                        pw_hash = hash_password(password)
-                        with sqlite3.connect('priminsberg_rides.db') as conn:
-                            c = conn.cursor()
-                            c.execute("INSERT INTO users (username, password, first_name, last_name, station, email, phone) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                      (username, pw_hash, first_name, last_name, station, email, phone))
-                            user_id = c.lastrowid
-                            c.execute("SELECT id, username, password, first_name, last_name, station, email, phone FROM users WHERE id=?", (user_id,))
-                            user = c.fetchone()
+            submitted = st.form_submit_button(translate("S'inscrire"))
+        with col2:
+            if st.form_submit_button(translate("Retour")):
+                st.session_state.page = "landing"
+                st.rerun()
 
-                        st.session_state.current_user = user
-                        st.success("Inscription terminée !")
+        if submitted:
+            if not all([username, password, first_name, last_name, station, email, phone, driving_license_date]):
+                st.error(translate("Veuillez remplir tous les champs obligatoires !"))
+            else:
+                try:
+                    pw_hash = hash_password(password)
+                    
+                    # Register user initially without profile picture path
+                    # The profile_picture argument in register_user_db is for the path, not the file object
+                    user_id = register_user_db(username, pw_hash, first_name, last_name, station, email, phone, driving_license_date.strftime('%Y-%m-%d'), None)
+
+                    if user_id:
+                        profile_pic_path = None
+                        if profile_picture_file is not None:
+                            # Save the uploaded profile picture using the new user_id
+                            profile_pic_path = save_profile_picture(profile_picture_file, user_id)
+                            if profile_pic_path:
+                                # Update the user's record with the saved picture path
+                                update_user_profile_picture(user_id, profile_pic_path)
+                                st.success(translate("Photo de profil téléchargée avec succès !"))
+                            else:
+                                st.warning(translate("Erreur lors du téléchargement de la photo de profil."))
+                        
+                        # Fetch the complete user object including the (potentially new) profile picture path
+                        st.session_state.current_user = get_user_by_username_db(username)
+                        st.success(translate("Inscription terminée !"))
                         st.session_state.page = "profile"
                         st.session_state.menu_selection = "profile"
                         st.rerun()
-                    except sqlite3.IntegrityError:
-                        st.error("Ce nom d'utilisateur existe déjà !")
-        with col2:
-            if st.form_submit_button("Retour"):
-                st.session_state.page = "landing"
-                st.rerun()
+                    else:
+                        st.error(translate("Ce nom d'utilisateur existe déjà !"))
+                except Exception as e:
+                    st.error(f"{translate('Une erreur est survenue lors de l\'inscription')} : {e}")
 
+# --- Profile Page ---
 def show_profile():
+    """Displays the user's profile information and registered vehicles."""
     user = st.session_state.current_user
+    user_id = user[0]
 
-    st.markdown("""
+    st.markdown(f"""
     <div class='info-card'>
-        <h3 style='color: var(--accent-red); margin-top: 0;'>Informations de profil</h3>
+        <h3 style='color: var(--accent-red); margin-top: 0;'>{translate("Informations de profil")}</h3>
     """, unsafe_allow_html=True)
+
+    # Display User Profile Picture
+    profile_picture_path = user[9] if len(user) > 9 else None # Get profile picture path from user tuple
+    display_full_path_image(profile_picture_path, translate("Votre photo de profil"), width=150)
 
     col1, col2 = st.columns(2)
     with col1:
-        st.write(f"**Nom d'utilisateur :** {user[1]}")
-        st.write(f"**Prénom :** {user[3]}")
-        st.write(f"**Nom de famille :** {user[4]}")
+        st.write(f"**{translate('Nom d\'utilisateur')} :** {user[1]}")
+        st.write(f"**{translate('Prénom')} :** {user[3]}")
+        st.write(f"**{translate('Nom de famille')} :** {user[4]}")
     with col2:
-        st.write(f"**Gare :** {user[5]}")
-        st.write(f"**Téléphone :** {user[7]}")
-        st.write(f"**Email :** {user[6]}")
+        st.write(f"**{translate('Gare')} :** {user[5]}")
+        st.write(f"**{translate('Téléphone')} :** {user[7]}")
+        st.write(f"**{translate('Email')} :** {user[6]}")
+    
+    st.write(f"**{translate('Date d\'obtention du permis')} :** {user[8]}")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-def show_display_rides():
-    with sqlite3.connect('priminsberg_rides.db') as conn:
-        c = conn.cursor()
-        c.execute("DELETE FROM rides WHERE available_seats <= 0 OR SUBSTR(date,7,4)||SUBSTR(date,4,2)||SUBSTR(date,1,2) < STRFTIME('%Y%m%d','now')")
-        conn.commit()
-
-        c.execute('''
-            SELECT r.id, u.username, r.start_location, r.destination, r.date, r.time, r.available_seats,
-                   u.first_name, u.last_name, u.email, u.phone
-            FROM rides r
-            JOIN users u ON r.provider_id = u.id
-            WHERE r.available_seats > 0
-              AND SUBSTR(r.date,7,4)||SUBSTR(r.date,4,2)||SUBSTR(r.date,1,2) >= STRFTIME('%Y%m%d','now')
-              AND r.provider_id != ?
-              AND r.id NOT IN (SELECT ride_id FROM bookings WHERE user_id=?)
-            ORDER BY SUBSTR(r.date,7,4)||SUBSTR(r.date,4,2)||SUBSTR(r.date,1,2) ASC, r.time ASC
-        ''', (st.session_state.current_user[0], st.session_state.current_user[0]))
-        rows = c.fetchall()
-
-    if not rows:
-        st.info("Aucun trajet réservable trouvé.")
-    else:
-        for r in rows:
-            with st.expander(f"{r[2]} → {r[3]}, {r[4]} {r[5]}, Fournisseur : {r[1]}, Sièges : {r[6]}", expanded=False):
-                st.markdown(f"""
-                <div style='background-color: var(--light-gray); padding: 15px; border-radius: 10px;'>
-                    <h4 style='color: var(--accent-red); margin-top: 0;'>Détails du trajet</h4>
-                    <p><strong>Itinéraire :</strong> {r[2]} → {r[3]}</p>
-                    <p><strong>Date :</strong> {r[4]}</p>
-                    <p><strong>Heure :</strong> {r[5]}</p>
-                    <p><strong>Sièges disponibles :</strong> {r[6]}</p>
-                </div>
-                """, unsafe_allow_html=True)
-
-                st.markdown("""
-                <div style='background-color: var(--light-gray); padding: 15px; border-radius: 10px; margin-top: 10px;'>
-                    <h4 style='color: var(--accent-red); margin-top: 0;'>Informations sur le conducteur</h4>
-                """, unsafe_allow_html=True)
-                st.write(f"**Conducteur :** {r[7]} {r[8]}")
-                st.write(f"**Nom d'utilisateur :** {r[1]}")
-                st.write(f"**Email :** {r[9]}")
-                st.write(f"**Téléphone :** {r[10]}")
-                st.markdown("</div>", unsafe_allow_html=True)
-
-                with sqlite3.connect('priminsberg_rides.db') as conn:
-                    c = conn.cursor()
-                    c.execute('''SELECT u.first_name, u.last_name, u.username, u.email, u.phone
-                                FROM bookings b
-                                JOIN users u ON b.user_id = u.id
-                                WHERE b.ride_id=?
-                             ''', (r[0],))
-                    passengers = c.fetchall()
-
-                st.markdown("""
-                <div style='background-color: var(--light-gray); padding: 15px; border-radius: 10px; margin-top: 10px;'>
-                    <h4 style='color: var(--accent-red); margin-top: 0;'>Passagers</h4>
-                """, unsafe_allow_html=True)
-                if not passengers:
-                    st.write("Pas encore de passagers pour ce trajet.")
-                else:
-                    for p in passengers:
-                        st.write(f"- {p[0]} {p[1]} (Nom d'utilisateur : {p[2]}) Téléphone : {p[4]}")
-                st.markdown("</div>", unsafe_allow_html=True)
-
-                if r[6] > 0:
-                    if st.button("Réserver le trajet", key=f"book_ride_{r[0]}"):
-                        with sqlite3.connect('priminsberg_rides.db') as conn:
-                            c = conn.cursor()
-                            c.execute("SELECT available_seats FROM rides WHERE id=?", (r[0],))
-                            current_seats = c.fetchone()
-                            if not current_seats or current_seats[0] <= 0:
-                                st.error("Ce trajet n'est plus réservable ou n'a plus de sièges disponibles !")
-                                st.rerun()
-                            else:
-                                c.execute("INSERT INTO bookings (user_id, ride_id) VALUES (?, ?)",
-                                          (st.session_state.current_user[0], r[0]))
-                                c.execute("UPDATE rides SET available_seats=available_seats-1 WHERE id=?", (r[0],))
-                                conn.commit()
-                                st.success("Trajet réservé avec succès !")
-                                st.rerun()
-
-    if st.button("Retour au profil", key="display_rides_back_button"):
-        st.session_state.menu_selection = "profile"
-        st.rerun()
-
-def show_offer_ride():
-    with st.form(key="offer_ride_form"):
-        start_location = st.text_input("Lieu de départ", key="offer_start_location")
-        destination = st.text_input("Destination", key="offer_destination")
-        date_input = st.date_input("Date", min_value=date.today(), key="offer_date")
-        time_input = st.time_input("Heure", key="offer_time")
-        available_seats = st.number_input("Sièges disponibles", min_value=1, step=1, value=1, key="offer_available_seats")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            submitted = st.form_submit_button("Enregistrer le trajet")
-            if submitted:
-                if not all([start_location, destination, date_input, time_input, available_seats]):
-                    st.error("Veuillez remplir tous les champs !")
-                else:
-                    date_str = date_input.strftime("%d.%m.%Y")
-                    time_str = time_input.strftime("%H:%M")
-
-                    with sqlite3.connect('priminsberg_rides.db') as conn:
-                        c = conn.cursor()
-                        c.execute("INSERT INTO rides (provider_id, start_location, destination, date, time, available_seats) VALUES (?, ?, ?, ?, ?, ?)",
-                                  (st.session_state.current_user[0], start_location, destination, date_str, time_str, available_seats))
-                        conn.commit()
-                    st.success("Trajet créé avec succès !")
-                    st.rerun()
-        with col2:
-            if st.form_submit_button("Retour au profil"):
-                st.session_state.menu_selection = "profile"
-                st.rerun()
-
-def show_my_rides():
-    styled_subheader("Trajets réservés")
-    with sqlite3.connect('priminsberg_rides.db') as conn:
-        c = conn.cursor()
-        c.execute(
-            """SELECT r.id, u.username, r.start_location, r.destination, r.date, r.time, r.available_seats,
-                      r.provider_id, b.id, u.first_name, u.last_name, u.phone, u.email
-               FROM bookings b
-               JOIN rides r ON b.ride_id = r.id
-               JOIN users u ON r.provider_id = u.id
-               WHERE b.user_id=? AND SUBSTR(r.date,7,4)||SUBSTR(r.date,4,2)||SUBSTR(r.date,1,2) >= STRFTIME('%Y%m%d','now')
-               ORDER BY SUBSTR(r.date,7,4)||SUBSTR(r.date,4,2)||SUBSTR(r.date,1,2), r.time""",
-            (st.session_state.current_user[0],))
-        booked_rides = c.fetchall()
-
-    if not booked_rides:
-        st.info("Vous n'avez réservé aucun trajet.")
-    else:
-        for f in booked_rides:
-            with st.expander(f"{f[2]} → {f[3]}, {f[4]} {f[5]}, Conducteur : {f[9]} {f[10]} (Nom d'utilisateur : {f[1]}) Téléphone : {f[11]}", expanded=False):
-                st.markdown(f"""
-                <div style='background-color: var(--light-gray); padding: 15px; border-radius: 10px;'>
-                    <h4 style='color: var(--accent-red); margin-top: 0;'>Détails du trajet</h4>
-                    <p><strong>Itinéraire :</strong> {f[2]} → {f[3]}</p>
-                    <p><strong>Date :</strong> {f[4]}</p>
-                    <p><strong>Heure :</strong> {f[5]}</p>
-                    <p><strong>Conducteur :</strong> {f[9]} {f[10]} (Nom d'utilisateur : {f[1]})</p>
-                    <p><strong>Email :</strong> {f[12]}</p>
-                    <p><strong>Téléphone :</strong> {f[11]}</p>
-                </div>
-                """, unsafe_allow_html=True)
-
-                if st.button("Annuler la réservation", key=f"cancel_booking_{f[8]}"):
-                    with sqlite3.connect('priminsberg_rides.db') as conn:
-                        c = conn.cursor()
-                        c.execute("SELECT ride_id FROM bookings WHERE id=?", (f[8],))
-                        ride_id_to_update = c.fetchone()
-                        if ride_id_to_update:
-                            c.execute("UPDATE rides SET available_seats=available_seats+1 WHERE id=?", (ride_id_to_update[0],))
-                        c.execute("DELETE FROM bookings WHERE id=?", (f[8],))
-                        conn.commit()
-                    st.success("Réservation annulée !")
-                    st.rerun()
-
     st.markdown("---")
-    styled_subheader("Trajets proposés")
-    with sqlite3.connect('priminsberg_rides.db') as conn:
-        c = conn.cursor()
-        c.execute(
-            "SELECT id, start_location, destination, date, time, available_seats FROM rides WHERE provider_id=? ORDER BY SUBSTR(date,7,4)||SUBSTR(date,4,2)||SUBSTR(date,1,2), time",
-            (st.session_state.current_user[0],))
-        offered_rides = c.fetchall()
+    styled_subheader(translate("Mes Véhicules"))
 
-    if not offered_rides:
-        st.info("Vous n'avez proposé aucun de vos propres trajets.")
+    vehicles = get_user_vehiculs_db(user_id) # Use the DB function
+
+    if vehicles:
+        for i, vehicle in enumerate(vehicles):
+            vehicle_id, marque, model, date_circulation, pic_inter1, pic_inter2, pic_exter1, pic_exter2 = vehicle
+            
+            st.markdown(f"""
+            <div class='vehicle-card'>
+                <h4>{translate("Véhicule")} {i+1}: {marque} {model}</h4>
+                <p><strong>{translate('Marque')}:</strong> {marque}</p>
+                <p><strong>{translate('Modèle')}:</strong> {model}</p>
+                <p><strong>{translate('Date de mise en circulation')}:</strong> {date_circulation}</p>
+            """, unsafe_allow_html=True)
+
+            # Display vehicle images
+            image_cols = st.columns(4)
+            with image_cols[0]:
+                display_full_path_image(pic_inter1, translate("Intérieur 1"), width=100)
+            with image_cols[1]:
+                display_full_path_image(pic_inter2, translate("Intérieur 2"), width=100)
+            with image_cols[2]:
+                display_full_path_image(pic_exter1, translate("Extérieur 1"), width=100)
+            with image_cols[3]:
+                display_full_path_image(pic_exter2, translate("Extérieur 2"), width=100)
+            
+            st.markdown("</div>", unsafe_allow_html=True) # Close vehicle-card div
+            st.markdown("---")
     else:
-        for f in offered_rides:
-            with st.expander(f"{f[1]} → {f[2]}, {f[3]} {f[4]}, Sièges : {f[5]}", expanded=False):
-                st.markdown("""
-                <div style='background-color: var(--light-gray); padding: 15px; border-radius: 10px;'>
-                    <h4 style='color: var(--accent-red); margin-top: 0;'>Passagers sur ce trajet</h4>
-                """, unsafe_allow_html=True)
-                with sqlite3.connect('priminsberg_rides.db') as conn:
-                    c = conn.cursor()
-                    c.execute('''SELECT u.first_name, u.last_name, u.username, u.email, u.phone
-                                FROM bookings b
-                                JOIN users u ON b.user_id = u.id
-                                WHERE b.ride_id=?
-                             ''', (f[0],))
-                    passengers_on_ride = c.fetchall()
-                if not passengers_on_ride:
-                    st.write("Pas encore de passagers pour ce trajet.")
+        st.info(translate("Aucun véhicule enregistré pour le moment."))
+
+
+# --- Vehicle Management Forms (New/Refactored) ---
+
+def show_add_vehicle_form(user_id):
+    """Displays a form to add a new vehicle."""
+    # The subheader is already outside in show_edit_profile for this expander
+    with st.form(key="add_vehicle_form"):
+        # Use columns for vehicle details
+        col_veh_details1, col_veh_details2 = st.columns(2)
+        with col_veh_details1:
+            marque = st.text_input(translate("Marque du véhicule"), key="add_veh_marque")
+            model = st.text_input(translate("Modèle du véhicule"), key="add_veh_model")
+        with col_veh_details2:
+            date_mise_en_circulation = st.date_input(translate("Date de mise en circulation"), key="add_veh_date_circulation")
+        
+        st.markdown("---")
+        st.subheader(translate("Images du véhicule (Optionnel)"))
+        # Use columns for image uploaders
+        col_img_upload1, col_img_upload2 = st.columns(2)
+        with col_img_upload1:
+            inter1 = st.file_uploader(translate("Image intérieure 1"), type=["jpg", "jpeg", "png"], key="add_veh_inter1")
+            inter2 = st.file_uploader(translate("Image intérieure 2"), type=["jpg", "jpeg", "png"], key="add_veh_inter2")
+        with col_img_upload2:
+            exter1 = st.file_uploader(translate("Image extérieure 1"), type=["jpg", "jpeg", "png"], key="add_veh_exter1")
+            exter2 = st.file_uploader(translate("Image extérieure 2"), type=["jpg", "jpeg", "png"], key="add_veh_exter2")
+        
+        submitted = st.form_submit_button(translate("Ajouter le véhicule"))
+        
+        if submitted:
+            if marque and model and date_mise_en_circulation:
+                # Save images first to get their paths
+                pictures = {
+                    'inter1': save_vehicle_image(inter1, user_id, "inter1") if inter1 else None,
+                    'inter2': save_vehicle_image(inter2, user_id, "inter2") if inter2 else None,
+                    'exter1': save_vehicle_image(exter1, user_id, "exter1") if exter1 else None,
+                    'exter2': save_vehicle_image(exter2, user_id, "exter2") if exter2 else None
+                }
+                
+                # Add the vehicle to the database
+                vehicle_id = add_vehicul_db(user_id, marque, model, 
+                                             date_mise_en_circulation.strftime('%Y-%m-%d'), 
+                                             pictures)
+                
+                if vehicle_id:
+                    st.success(translate("Véhicule ajouté avec succès!"))
+                    st.rerun() # Rerun to refresh the list of vehicles
                 else:
-                    for p in passengers_on_ride:
-                        st.write(f"- {p[0]} {p[1]} (Nom d'utilisateur : {p[2]}) Téléphone : {p[4]}")
-                st.markdown("</div>", unsafe_allow_html=True)
+                    st.error(translate("Erreur lors de l'ajout du véhicule."))
+            else:
+                st.error(translate("Veuillez remplir au moins la marque, le modèle et la date de mise en circulation du véhicule."))
 
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("Modifier", key=f"edit_ride_{f[0]}"):
-                        st.session_state.edit_ride = f[0]
-                        st.rerun()
-                with col2:
-                    if st.button("Supprimer", key=f"delete_ride_{f[0]}"):
-                        with sqlite3.connect('priminsberg_rides.db') as conn:
-                            c = conn.cursor()
-                            c.execute("DELETE FROM rides WHERE id=?", (f[0],))
-                            c.execute("DELETE FROM bookings WHERE ride_id=?", (f[0],))
-                            conn.commit()
-                        st.success("Trajet supprimé !")
-                        st.rerun()
+def show_edit_vehicle_form(user_id, vehicle_data):
+    """Displays a form to edit an existing vehicle."""
+    vehicle_id, marque, model, date_circulation, pic_inter1, pic_inter2, pic_exter1, pic_exter2 = vehicle_data
 
-    if 'edit_ride' in st.session_state and st.session_state.edit_ride is not None:
-        edit_ride(st.session_state.edit_ride)
-    elif st.button("Retour au profil", key="my_rides_back_button"):
-        st.session_state.menu_selection = "profile"
-        st.rerun()
+    st.subheader(f"{translate('Modifier le véhicule')}: {marque} {model}")
+    with st.form(key=f"edit_vehicle_form_{vehicle_id}"):
+        # Use columns for vehicle details
+        col_edit_veh_details1, col_edit_veh_details2 = st.columns(2)
+        with col_edit_veh_details1:
+            new_marque = st.text_input(translate("Marque du véhicule"), value=marque, key=f"edit_veh_marque_{vehicle_id}")
+            new_model = st.text_input(translate("Modèle du véhicule"), value=model, key=f"edit_veh_model_{vehicle_id}")
+        with col_edit_veh_details2:
+            current_date_circulation = datetime.datetime.strptime(date_circulation, '%Y-%m-%d').date() if date_circulation else date.today()
+            new_date_circulation = st.date_input(translate("Date de mise en circulation"), value=current_date_circulation, key=f"edit_veh_date_circulation_{vehicle_id}")
+        
+        st.markdown("---")
+        st.subheader(translate("Images du véhicule"))
 
-def edit_ride(ride_id):
-    with sqlite3.connect('priminsberg_rides.db') as conn:
-        c = conn.cursor()
-        c.execute("SELECT start_location, destination, date, time, available_seats FROM rides WHERE id=?", (ride_id,))
-        r = c.fetchone()
+        # Display current images and allow new uploads in columns
+        current_pics = {
+            'inter1': pic_inter1, 'inter2': pic_inter2,
+            'exter1': pic_exter1, 'exter2': pic_exter2
+        }
+        uploaded_pics = {}
+        
+        # Group image display and uploaders into two columns
+        col_current_img1, col_current_img2 = st.columns(2)
+        col_upload_img1, col_upload_img2 = st.columns(2)
 
-    if not r:
-        st.error("Le trajet n'existe plus !")
-        if 'edit_ride' in st.session_state:
-            del st.session_state.edit_ride
-        st.rerun()
-        return
+        with col_current_img1:
+            st.write(translate("Images intérieures actuelles"))
+            display_full_path_image(current_pics['inter1'], translate("Intérieur 1"), width=80)
+            display_full_path_image(current_pics['inter2'], translate("Intérieur 2"), width=80)
+        with col_current_img2:
+            st.write(translate("Images extérieures actuelles"))
+            display_full_path_image(current_pics['exter1'], translate("Extérieur 1"), width=80)
+            display_full_path_image(current_pics['exter2'], translate("Extérieur 2"), width=80)
 
-    try:
-        current_date = datetime.datetime.strptime(r[2], "%d.%m.%Y").date()
-    except ValueError:
-        current_date = date.today()
-    try:
-        current_time = datetime.datetime.strptime(r[3], "%H:%M").time()
-    except ValueError:
-        current_time = datetime.time(0, 0)
+        with col_upload_img1:
+            uploaded_pics['inter1'] = st.file_uploader(translate("Changer Intérieur 1"), type=["jpg", "jpeg", "png"], key=f"edit_veh_inter1_{vehicle_id}")
+            uploaded_pics['inter2'] = st.file_uploader(translate("Changer Intérieur 2"), type=["jpg", "jpeg", "png"], key=f"edit_veh_inter2_{vehicle_id}")
+        with col_upload_img2:
+            uploaded_pics['exter1'] = st.file_uploader(translate("Changer Extérieur 1"), type=["jpg", "jpeg", "png"], key=f"edit_veh_exter1_{vehicle_id}")
+            uploaded_pics['exter2'] = st.file_uploader(translate("Changer Extérieur 2"), type=["jpg", "jpeg", "png"], key=f"edit_veh_exter2_{vehicle_id}")
 
-    with st.form(key=f"edit_ride_form_{ride_id}"):
-        start_location = st.text_input("Lieu de départ", value=r[0], key=f"edit_start_location_{ride_id}")
-        destination = st.text_input("Destination", value=r[1], key=f"edit_destination_{ride_id}")
-        date_input = st.date_input("Date", value=current_date, min_value=date.today(), key=f"edit_date_{ride_id}")
-        time_input = st.time_input("Heure", value=current_time, key=f"edit_time_{ride_id}")
-        available_seats = st.number_input("Sièges disponibles", min_value=1, value=r[4], step=1, key=f"edit_available_seats_{ride_id}")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            submitted = st.form_submit_button("Enregistrer")
-        with col2:
-            canceled = st.form_submit_button("Annuler")
+        col_buttons = st.columns(2)
+        with col_buttons[0]:
+            submitted = st.form_submit_button(translate("Enregistrer les modifications"))
+        with col_buttons[1]:
+            canceled = st.form_submit_button(translate("Annuler"))
 
         if canceled:
-            if 'edit_ride' in st.session_state:
-                del st.session_state.edit_ride
+            st.session_state.editing_vehicle_id = None # Exit edit mode
             st.rerun()
 
         if submitted:
-            if not all([start_location, destination, date_input, time_input, available_seats]):
-                st.error("Veuillez remplir tous les champs !")
-            else:
-                date_str_save = date_input.strftime("%d.%m.%Y")
-                time_str_save = time_input.strftime("%H:%M")
-
+            if new_marque and new_model and new_date_circulation:
+                new_pictures_to_save = {}
+                for key, uploaded_file in uploaded_pics.items():
+                    if uploaded_file:
+                        new_pictures_to_save[key] = save_vehicle_image(uploaded_file, user_id, f"{key}_updated")
+                    else:
+                        new_pictures_to_save[key] = current_pics[key]
+                
                 with sqlite3.connect('priminsberg_rides.db') as conn:
                     c = conn.cursor()
-                    c.execute("UPDATE rides SET start_location=?, destination=?, date=?, time=?, available_seats=? WHERE id=?",
-                              (start_location, destination, date_str_save, time_str_save, available_seats, ride_id))
+                    c.execute('''
+                        UPDATE vehicul SET marque=?, model=?, date_mise_en_circulation=?
+                        WHERE id=? AND user_id=?
+                    ''', (new_marque, new_model, new_date_circulation.strftime('%Y-%m-%d'), vehicle_id, user_id))
                     conn.commit()
-                st.success("Trajet mis à jour avec succès !")
-                if 'edit_ride' in st.session_state:
-                    del st.session_state.edit_ride
-                st.rerun()
+
+                if update_vehicul_pictures(vehicle_id, new_pictures_to_save):
+                    st.success(translate("Véhicule mis à jour avec succès!"))
+                    st.session_state.editing_vehicle_id = None # Exit edit mode
+                    st.rerun()
+                else:
+                    st.error(translate("Erreur lors de la mise à jour des images du véhicule."))
+            else:
+                st.error(translate("Veuillez remplir tous les champs obligatoires pour le véhicule."))
+
+
+# --- Edit Profile Page (Modified to include Vehicle Management) ---
 
 def show_edit_profile():
+    """
+    Displays the form to edit user profile information and manage vehicles.
+    """
     user = st.session_state.current_user
+    user_id = user[0]
 
+    # --- Section 1: Edit Personal Information ---
+    styled_subheader(translate("Modifier mes informations personnelles"))
     with st.form(key="edit_profile_form"):
-        first_name = st.text_input("Prénom", value=user[3], key="edit_profile_first_name")
-        last_name = st.text_input("Nom de famille", value=user[4], key="edit_profile_last_name")
-        station = st.text_input("Gare", value=user[5], key="edit_profile_station")
-        phone = st.text_input("Téléphone", value=user[7], key="edit_profile_phone")
-        email = st.text_input("Email", value=user[6], key="edit_profile_email")
+        # Create two columns for personal info fields
+        col1_personal, col2_personal = st.columns(2)
 
-        col1, col2 = st.columns(2)
-        with col1:
-            submitted = st.form_submit_button("Enregistrer")
-        with col2:
-            canceled = st.form_submit_button("Annuler")
+        with col1_personal:
+            first_name = st.text_input(translate("Prénom"), value=user[3], key="edit_profile_first_name")
+            last_name = st.text_input(translate("Nom de famille"), value=user[4], key="edit_profile_last_name")
+            station = st.text_input(translate("Gare"), value=user[5], key="edit_profile_station")
+        
+        with col2_personal:
+            phone = st.text_input(translate("Téléphone"), value=user[7], key="edit_profile_phone")
+            email = st.text_input(translate("Email"), value=user[6], key="edit_profile_email")
+            # Convert string date from DB to datetime.date object for st.date_input
+            current_license_date = datetime.datetime.strptime(user[8], '%Y-%m-%d').date() if user[8] else date.today()
+            driving_license_date = st.date_input(translate("Date d'obtention du permis"), value=current_license_date, key="edit_license_date")
+        
+        # Profile picture upload functionality (now also in columns)
+        st.markdown("---")
+        st.subheader(translate("Photo de profil"))
+        col_profile_pic_display, col_profile_pic_uploader = st.columns([1, 2]) # Adjusted ratio for display vs uploader
+
+        with col_profile_pic_display:
+            current_profile_pic_path = user[9] if len(user) > 9 and user[9] else None
+            display_full_path_image(current_profile_pic_path, translate("Photo de profil actuelle"), width=100)
+        
+        with col_profile_pic_uploader:
+            st.markdown("<br>", unsafe_allow_html=True) # Add a small vertical space
+            uploaded_profile_picture = st.file_uploader(translate("Changer la photo de profil"), type=["png", "jpg", "jpeg"], key="profile_picture_uploader")
+
+        col_buttons_profile = st.columns(2)
+        with col_buttons_profile[0]:
+            submitted = st.form_submit_button(translate("Enregistrer les modifications du profil"))
+        with col_buttons_profile[1]:
+            canceled = st.form_submit_button(translate("Annuler les modifications du profil"))
 
         if canceled:
             st.session_state.menu_selection = "profile"
             st.rerun()
 
-
         if submitted:
-            if not all([first_name, last_name, station, phone, email]):
-                st.error("Aucun champ ne peut être vide !")
+            if not all([first_name, last_name, station, phone, email, driving_license_date]):
+                st.error(translate("Aucun champ personnel ne peut être vide !"))
             else:
-                with sqlite3.connect('priminsberg_rides.db') as conn:
-                    c = conn.cursor()
-                    c.execute("UPDATE users SET first_name=?, last_name=?, station=?, phone=?, email=? WHERE id=?",
-                              (first_name, last_name, station, phone, email, user[0]))
-                    conn.commit()
-                    c.execute("SELECT id, username, password, first_name, last_name, station, email, phone FROM users WHERE id=?", (user[0],))
-                    u = c.fetchone()
-                st.session_state.current_user = u
-                st.success("Profil mis à jour !")
-                st.session_state.menu_selection = "profile"
-                st.rerun()
+                profile_picture_path_to_save = current_profile_pic_path # Default to current path
+
+                if uploaded_profile_picture is not None:
+                    # Save the new profile picture, this function also handles deleting the old one
+                    new_path = save_profile_picture(uploaded_profile_picture, user_id)
+                    if new_path:
+                        profile_picture_path_to_save = new_path
+                        st.success(translate("Nouvelle photo de profil téléchargée avec succès !"))
+                    else:
+                        st.error(translate("Erreur lors du téléchargement de la nouvelle photo de profil."))
+
+                # Update user profile in DB
+                update_user_profile_db(user_id, first_name, last_name, station, email, phone, driving_license_date.strftime('%Y-%m-%d'))
+                
+                # Update profile picture path (if changed)
+                update_user_profile_picture(user_id, profile_picture_path_to_save)
+
+                # Refresh session state user data
+                st.session_state.current_user = get_user_by_username_db(user[1]) # Fetch updated user data
+                st.success(translate("Profil personnel mis à jour avec succès !"))
+                st.rerun() # Rerun to reflect changes
+
+
+    st.markdown("---")
+    # --- Section 2: Manage Vehicles ---
+    styled_subheader(translate("Gestion des Véhicules"))
+
+    
+    col_add_veh, col_list_veh = st.columns([1, 1]) 
+
+    with col_add_veh:
+        with st.expander(translate("Ajouter un nouveau véhicule"), expanded=False):
+            show_add_vehicle_form(user_id)
+
+    with col_list_veh:
+        st.subheader(translate("Mes véhicules enregistrés"))
+        vehicles = get_user_vehiculs_db(user_id) 
+
+        if vehicles:
+        
+            if st.session_state.editing_vehicle_id:
+                editing_vehicle_data = next((v for v in vehicles if v[0] == st.session_state.editing_vehicle_id), None)
+                if editing_vehicle_data:
+                    show_edit_vehicle_form(user_id, editing_vehicle_data)
+                else:
+                    st.session_state.editing_vehicle_id = None 
+                    st.rerun()
+            else:
+             
+                num_vehicles = len(vehicles)
+                for i in range(0, num_vehicles, 2):
+                    row_cols = st.columns(2)
+                    for j in range(2):
+                        if i + j < num_vehicles:
+                            vehicle = vehicles[i + j]
+                            vehicle_id, marque, model, date_circulation, pic_inter1, pic_inter2, pic_exter1, pic_exter2 = vehicle
+                            
+                            with row_cols[j]: 
+                                st.markdown(f"""
+                                <div class='vehicle-card'>
+                                    <h4>{translate("Véhicule")}: {marque} {model}</h4>
+                                    <p><strong>{translate('Marque')}:</strong> {marque}</p>
+                                    <p><strong>{translate('Modèle')}:</strong> {model}</p>
+                                    <p><strong>{translate('Date de mise en circulation')}:</strong> {date_circulation}</p>
+                                """, unsafe_allow_html=True)
+
+                               
+                                card_image_cols = st.columns(2) 
+                                with card_image_cols[0]:
+                                    display_full_path_image(pic_inter1, translate("Intérieur 1"), width=80)
+                                    display_full_path_image(pic_inter2, translate("Intérieur 2"), width=80)
+                                with card_image_cols[1]:
+                                    display_full_path_image(pic_exter1, translate("Extérieur 1"), width=80)
+                                    display_full_path_image(pic_exter2, translate("Extérieur 2"), width=80)
+                                
+                                col_actions = st.columns(2)
+                                with col_actions[0]:
+                                    if st.button(translate("Modifier ce véhicule"), key=f"edit_veh_{vehicle_id}"):
+                                        st.session_state.editing_vehicle_id = vehicle_id
+                                        st.rerun()
+                                with col_actions[1]:
+                                    delete_button_key = f"delete_veh_{vehicle_id}"
+                                    confirm_delete_button_key = f"confirm_delete_veh_{vehicle_id}"
+
+                                    if st.button(translate("Supprimer ce véhicule"), key=delete_button_key):
+                                        st.session_state[f'confirm_delete_{vehicle_id}'] = True
+                                        st.rerun()
+
+                                if st.session_state.get(f'confirm_delete_{vehicle_id}', False):
+                                    st.warning(translate("Êtes-vous sûr de vouloir supprimer ce véhicule et toutes ses images ? Cette action est irréversible."))
+                                    if st.button(translate("Confirmer la suppression"), key=confirm_delete_button_key):
+                                        for img_path in [pic_inter1, pic_inter2, pic_exter1, pic_exter2]:
+                                            if img_path:
+                                                delete_image(img_path)
+                                        with sqlite3.connect('priminsberg_rides.db') as conn:
+                                            c = conn.cursor()
+                                            c.execute("DELETE FROM vehicul WHERE id=?", (vehicle_id,))
+                                            conn.commit()
+                                        st.success(translate("Véhicule supprimé avec succès !"))
+                                        st.session_state[f'confirm_delete_{vehicle_id}'] = False
+                                        st.rerun()
+                                    if st.button(translate("Annuler la suppression"), key=f"cancel_delete_veh_{vehicle_id}"):
+                                        st.session_state[f'confirm_delete_{vehicle_id}'] = False
+                                        st.rerun()
+
+                                st.markdown("</div>", unsafe_allow_html=True) 
+                                st.markdown("---")
+        else:
+            st.info(translate("Aucun véhicule enregistré pour le moment. Utilisez le formulaire ci-dessus pour en ajouter un."))
+
+
 
 if __name__ == "__main__":
     main()
