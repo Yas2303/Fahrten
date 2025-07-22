@@ -1,0 +1,4 @@
+[runner]
+# Spécifiez une version de Python stable et supportée.
+# Python 3.10 est un bon choix, largement compatible.
+python_version = "3.10"
