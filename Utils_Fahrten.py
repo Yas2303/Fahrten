@@ -10,6 +10,19 @@ import os
 import base64
 
 
+DB_FILE = 'priminsberg_rides.db'
+def get_user_by_username_db(username):
+    """
+    Retrieves user information by username.
+    Returns a tuple of user data or None if not found.
+    """
+    with sqlite3.connect(DB_FILE) as conn:
+        c = conn.cursor()
+        c.execute('''
+            SELECT id, username, password, first_name, last_name, station, email, phone, driving_license_date, profile_picture 
+            FROM users WHERE username = ?
+        ''', (username,))
+        return c.fetchone()
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 

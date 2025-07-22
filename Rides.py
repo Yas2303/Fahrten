@@ -8,10 +8,22 @@ import os
 import base64
 from Database_Fahrten import setup_db
 from Utils_Fahrten import display_logo,hash_password,verify_password,translate,get_base64_icon,styled_subheader
+from Css import style_css
+from streamlit_folium import folium_static
+import folium
+from geopy.geocoders import Nominatim
+from geopy.exc import GeocoderTimedOut
 
-
-
-
+def geocode_address(address):
+    """Fonction pour géocoder une adresse en coordonnées GPS"""
+    geolocator = Nominatim(user_agent="priminsberg_rides")
+    try:
+        location = geolocator.geocode(address)
+        if location:
+            return (location.latitude, location.longitude)
+        return None
+    except GeocoderTimedOut:
+        return geocode_address(address)  # Réessaye en cas de timeout
 
 
 
@@ -73,39 +85,110 @@ def show_my_rides():
     else:
         for f in offered_rides:
             with st.expander(f"{f[1]} → {f[2]}, {f[3]} {f[4]}, Sièges : {f[5]}", expanded=False):
-                st.markdown("""
-                <div style='background-color: var(--light-gray); padding: 15px; border-radius: 10px;'>
-                    <h4 style='color: var(--accent-red); margin-top: 0;'>Passagers sur ce trajet</h4>
-                """, unsafe_allow_html=True)
-                with sqlite3.connect('priminsberg_rides.db') as conn:
-                    c = conn.cursor()
-                    c.execute('''SELECT u.first_name, u.last_name, u.username, u.email, u.phone
-                                FROM bookings b
-                                JOIN users u ON b.user_id = u.id
-                                WHERE b.ride_id=?
-                             ''', (f[0],))
-                    passengers_on_ride = c.fetchall()
-                if not passengers_on_ride:
-                    st.write("Pas encore de passagers pour ce trajet.")
-                else:
-                    for p in passengers_on_ride:
-                        st.write(f"- {p[0]} {p[1]} (Nom d'utilisateur : {p[2]}) Téléphone : {p[4]}")
-                st.markdown("</div>", unsafe_allow_html=True)
+                col_info, col_map = st.columns([1, 1])
+                
+                with col_info:
+                    st.markdown("""
+                    <div style='background-color: var(--light-gray); padding: 15px; border-radius: 10px;'>
+                        <h4 style='color: var(--accent-red); margin-top: 0;'>Passagers sur ce trajet</h4>
+                    """, unsafe_allow_html=True)
+                    with sqlite3.connect('priminsberg_rides.db') as conn:
+                        c = conn.cursor()
+                        c.execute('''SELECT u.first_name, u.last_name, u.username, u.email, u.phone
+                                    FROM bookings b
+                                    JOIN users u ON b.user_id = u.id
+                                    WHERE b.ride_id=?
+                                 ''', (f[0],))
+                        passengers_on_ride = c.fetchall()
+                    if not passengers_on_ride:
+                        st.write("Pas encore de passagers pour ce trajet.")
+                    else:
+                        for p in passengers_on_ride:
+                            st.write(f"- {p[0]} {p[1]} (Nom d'utilisateur : {p[2]}) Téléphone : {p[4]}")
+                    st.markdown("</div>", unsafe_allow_html=True)
 
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("Modifier", key=f"edit_ride_{f[0]}"):
-                        st.session_state.edit_ride = f[0]
-                        st.rerun()
-                with col2:
-                    if st.button("Supprimer", key=f"delete_ride_{f[0]}"):
-                        with sqlite3.connect('priminsberg_rides.db') as conn:
-                            c = conn.cursor()
-                            c.execute("DELETE FROM rides WHERE id=?", (f[0],))
-                            c.execute("DELETE FROM bookings WHERE ride_id=?", (f[0],))
-                            conn.commit()
-                        st.success("Trajet supprimé !")
-                        st.rerun()
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("Modifier", key=f"edit_ride_{f[0]}", use_container_width=True):
+                            st.session_state.edit_ride = f[0]
+                            st.rerun()
+                    with col_btn2:
+                        if st.button("Supprimer", key=f"delete_ride_{f[0]}", use_container_width=True):
+                            with sqlite3.connect('priminsberg_rides.db') as conn:
+                                c = conn.cursor()
+                                c.execute("DELETE FROM rides WHERE id=?", (f[0],))
+                                c.execute("DELETE FROM bookings WHERE ride_id=?", (f[0],))
+                                conn.commit()
+                            st.success("Trajet supprimé !")
+                            st.rerun()
+                
+                with col_map:
+                    # Géocodage des adresses (sans valeurs par défaut)
+                    start_coords = geocode_address(f[1])
+                    end_coords = geocode_address(f[2])
+                    
+                    if start_coords and end_coords:
+                        # Création de la carte centrée sur le point milieu
+                        m = folium.Map(
+                            location=[(start_coords[0] + end_coords[0])/2, 
+                            (start_coords[1] + end_coords[1])/2],
+                            zoom_start=6
+                        )
+                        
+                        # Ajout des marqueurs
+                        folium.Marker(
+                            location=start_coords,
+                            popup=f"Départ: {f[1]}",
+                            icon=folium.Icon(color='green')
+                        ).add_to(m)
+                        
+                        folium.Marker(
+                            location=end_coords,
+                            popup=f"Arrivée: {f[2]}",
+                            icon=folium.Icon(color='red')
+                        ).add_to(m)
+                        
+                        # Utilisation de OSRM pour obtenir l'itinéraire routier
+                        try:
+                            import requests
+                            
+                            # Requête à l'API OSRM pour obtenir le trajet
+                            osrm_url = f"http://router.project-osrm.org/route/v1/driving/{start_coords[1]},{start_coords[0]};{end_coords[1]},{end_coords[0]}?overview=full&geometries=geojson"
+                            response = requests.get(osrm_url)
+                            route_data = response.json()
+                            
+                            if route_data.get('code') == 'Ok':
+                                # Extraction des coordonnées de l'itinéraire
+                                route_coords = [(coord[1], coord[0]) for coord in route_data['routes'][0]['geometry']['coordinates']]
+                                
+                                # Ajout de la ligne avec l'itinéraire routier
+                                folium.PolyLine(
+                                    locations=route_coords,
+                                    color='blue',
+                                    weight=3,
+                                    opacity=0.7
+                                ).add_to(m)
+                            else:
+                                # En cas d'erreur avec OSRM, tracer une ligne droite
+                                folium.PolyLine(
+                                    locations=[start_coords, end_coords],
+                                    color='blue',
+                                    weight=2.5,
+                                    opacity=1
+                                ).add_to(m)
+                        except:
+                            # En cas d'erreur, tracer une ligne droite
+                            folium.PolyLine(
+                                locations=[start_coords, end_coords],
+                                color='blue',
+                                weight=2.5,
+                                opacity=1
+                            ).add_to(m)
+                        
+                        # Affichage de la carte
+                        folium_static(m, width=700, height=300)
+                    else:
+                        st.warning("Impossible de géocoder une ou plusieurs adresses")
 
     if 'edit_ride' in st.session_state and st.session_state.edit_ride is not None:
         edit_ride(st.session_state.edit_ride)
@@ -113,6 +196,8 @@ def show_my_rides():
         st.session_state.menu_selection = "profile"
         st.rerun()
 
+        
+# [Les autres fonctions (edit_ride, show_display_rides, show_offer_ride) restent inchangées]
 def edit_ride(ride_id):
     with sqlite3.connect('priminsberg_rides.db') as conn:
         c = conn.cursor()

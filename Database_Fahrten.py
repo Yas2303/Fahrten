@@ -12,9 +12,8 @@ import datetime
 from datetime import date, datetime
 from PIL import Image
 import os
-import base64 # Not directly used in the provided functions, but kept as it was in original.
-
-# Configuration des dossiers pour les images
+import base64 
+from Utils_Fahrten import get_user_by_username_db
 DB_FILE = 'priminsberg_rides.db'
 UPLOAD_DIR = "uploads" # Base directory for all uploaded files
 PROFILE_PICTURES_DIR = os.path.join(UPLOAD_DIR, "profile_pictures")
@@ -219,18 +218,7 @@ def register_user_db(username, password_hash, first_name, last_name, station, em
             # Username already exists
             return None
 
-def get_user_by_username_db(username):
-    """
-    Retrieves user information by username.
-    Returns a tuple of user data or None if not found.
-    """
-    with sqlite3.connect(DB_FILE) as conn:
-        c = conn.cursor()
-        c.execute('''
-            SELECT id, username, password, first_name, last_name, station, email, phone, driving_license_date, profile_picture 
-            FROM users WHERE username = ?
-        ''', (username,))
-        return c.fetchone()
+
 
 def update_user_profile_db(user_id, first_name, last_name, station, email, phone, driving_license_date=None):
     """
