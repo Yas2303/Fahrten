@@ -1,10 +1,11 @@
 streamlit
-markdown-it-py==3.0.0
-mdurl==0.1.2
-rich==14.0.0
+streamlit-folium
 pandas
 folium
 geopy
 bcrypt
 Pillow
+markdown-it-py==3.0.0
+mdurl==0.1.2
+rich==14.0.0
 
