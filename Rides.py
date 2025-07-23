@@ -46,7 +46,7 @@ def geocode_address(address):
             return (results[0]['geometry']['lat'], results[0]['geometry']['lng'])
         return None
     except KeyError:
-        st.warning("OpenCage API key not found in secrets. Falling back to Nominatim (may be rate-limited).")
+       # st.warning("OpenCage API key not found in secrets. Falling back to Nominatim (may be rate-limited).")
         geolocator = Nominatim(user_agent="priminsberg_rides")
         try:
             location = geolocator.geocode(address, timeout=10)
