@@ -1,9 +1,9 @@
-streamlit
-streamlit-folium
-folium
-geopy
-bcrypt
-Pillow
-opencage-geocoder
-requests
-python-dateutil
+streamlit==1.47.0
+streamlit-folium==0.25.0
+folium==0.20.0
+geopy==2.4.1
+bcrypt==4.3.0
+Pillow==11.3.0
+opencage==3.2.0  # Le nom correct du package
+requests==2.31.0
+python-dateutil==2.9.0.post0
