@@ -9,22 +9,50 @@ import base64
 from io import BytesIO
 from Rides import show_display_rides,show_offer_ride,show_my_rides
 from Css import style_css
+import socket
+import requests
+
+
+
+def get_local_ip():
+    """Get the local IP address of the user"""
+    try:
+        # Create a socket connection to a public server to get local IP
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+        return local_ip
+    except:
+        try:
+            # Fallback method
+            return socket.gethostbyname(socket.gethostname())
+        except:
+            return "127.0.0.1"  # Default localhost if all fails
+
+def get_public_ip():
+    """Get the public IP address of the user"""
+    try:
+        return requests.get('https://api.ipify.org').text
+    except:
+        return "Non disponible"
+    
 
 def get_db_connection():
     conn = sqlite3.connect('priminsberg_rides.db')
     conn.row_factory = sqlite3.Row
     return conn
 
-# --- Configuration des dossiers pour les images ---
+
 UPLOAD_DIR = "uploads"
 PROFILE_PICTURES_DIR = os.path.join(UPLOAD_DIR, "profile_pictures")
 VEHICLE_PICTURES_DIR = os.path.join(UPLOAD_DIR, "vehicle_pictures")
 
-# Assurez-vous que les dossiers existent
+
 os.makedirs(PROFILE_PICTURES_DIR, exist_ok=True)
 os.makedirs(VEHICLE_PICTURES_DIR, exist_ok=True)
 
-# --- Importations des modules locaux ---
+
 from Database_Fahrten import (
     setup_db, add_vehicul_db, save_vehicle_image, save_profile_picture, save_image,
     update_user_profile_picture, update_vehicul_pictures, delete_image, display_image,
@@ -34,7 +62,7 @@ from Database_Fahrten import (
 )
 from Utils_Fahrten import display_logo, hash_password, verify_password, translate, get_base64_icon
 
-# --- Helper Functions for UI ---
+
 
 def display_app_header(page_title):
     style_css()
@@ -77,7 +105,7 @@ def display_full_path_image(image_relative_path, caption, width=None, circle=Fal
             try:
                 image = Image.open(full_path)
                 if circle:
-                    # Use custom CSS for circular images
+                
                     st.markdown(f"""
                     <div style="text-align: center; margin: 10px 0;">
                         <img src="data:image/png;base64,{image_to_base64(image)}" 
@@ -94,8 +122,6 @@ def display_full_path_image(image_relative_path, caption, width=None, circle=Fal
             st.info(f"{translate('Image non trouvée pour')} {caption} ({image_relative_path}).")
     else:
         st.info(f"{translate('Pas de chemin d\'image fourni pour')} {caption}.")
-
-# --- Main Application Logic ---
 
 def main():
     style_css()
@@ -115,8 +141,6 @@ def main():
         )
 
     setup_db() # Ensure database is set up
-
-  
 
     # --- Session State Initialization ---
     if 'current_user' not in st.session_state:
@@ -142,7 +166,7 @@ def main():
     else:
         # Authenticated User Sidebar Menu
         st.sidebar.markdown(f"""
-        <div style="text-align: center; margin-bottom: 30px;">
+        <div style="text-align: center; margin-bottom: 10px;">
             <h2 style="color: white; font-size: 1.5em; font-weight: bold; 
                         border-bottom: 2px solid var(--accent-red); padding-bottom: 10px;">
                 {translate("Bienvenue")}, {st.session_state.current_user[3]}!
@@ -171,6 +195,25 @@ def main():
             st.session_state.editing_vehicle_id = None
             st.rerun()
 
+        # Affichage des informations de localisation et connexion
+        st.sidebar.markdown("---")
+        st.sidebar.markdown(f"""
+        <div style="color: white; font-size: 1em; margin-top: 20px; padding: 10px; 
+                     background-color: rgba(0,0,0,0.2); border-radius: 5px;">
+            <p style="margin: 0; font-weight: bold; color: #f10000; font-size: 1.1em;">
+                Maroc • Rabat Salé Zemour Zair
+            </p>
+            <p style="margin: 5px 0 0 0; font-weight: bold; border-top: 1px solid #8c8c8c; padding-top: 5px;">
+                {translate('Connecté depuis')}:
+            </p>
+            <p style="margin: 3px 0; word-break: break-all;">
+                <span style="font-weight: bold;">{translate('IP Locale')}:</span> {get_local_ip()}
+            </p>
+            <p style="margin: 3px 0; word-break: break-all;">
+                <span style="font-weight: bold;">{translate('IP Publique')}:</span> {get_public_ip()}
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
 
     # --- Authenticated User Main Content ---
     if st.session_state.current_user is not None:
@@ -189,8 +232,6 @@ def main():
         elif st.session_state.menu_selection == "edit_profile":
             display_app_header(translate("Modifier le profil"))
             show_edit_profile()
-
-# --- Page Functions ---
 
 def show_landing():
     """Displays the landing page with login/register options."""
